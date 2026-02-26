@@ -1,84 +1,79 @@
 package ur_os;
 
-import java.util.Comparator;
+/**
+ *
+ * @author prestamour
+ */
+public class SJF_NP extends Scheduler{
 
-public class SJF_P extends Scheduler {
-
-    public SJF_P(OS os) {
+    @SuppressWarnings("unused")
+     public SJF_NP(OS os){
         super(os);
+        System.out.println(">>> SJF_NP scheduler ACTIVADO");
+        
+    }
+    
+   
+   @Override
+public void getNext(boolean cpuEmpty) {
+
+    // Si el CPU NO está vacío, no hacemos nada.
+    // En SJF Non-Preemptive nunca interrumpimos un proceso en ejecución.
+    if(!cpuEmpty){
+        return;
     }
 
-    @Override
-    public void getNext(boolean cpuEmpty) {
+    // Si no hay procesos en la Ready Queue tampoco hay nada que ejecutar
+    if(processes.isEmpty()){
+        return;
+    }
 
-        if (!cpuEmpty || processes.isEmpty())
-            return;
+    // Tomamos el primer proceso de la lista como candidato inicial
+    Process shortest = processes.getFirst();
 
-        Process shortest = processes.stream()
-                .min(Comparator.comparingInt(Process::getRemainingTimeInCurrentBurst))
-                .orElse(null);
+    // Recorremos todos los procesos de la Ready Queue
+    for(Process p : processes){
 
-        if (shortest != null) {
-            removeProcess(shortest);
-            //addContextSwitch();
-            os.interrupt(InterruptType.SCHEDULER_RQ_TO_CPU, shortest);
+        // Tiempo restante del proceso que estamos evaluando
+        int remainingP = p.getRemainingTimeInCurrentBurst();
+
+        // Tiempo restante del proceso más corto encontrado hasta ahora
+        int remainingShortest = shortest.getRemainingTimeInCurrentBurst();
+
+        // Si encontramos un proceso con menor tiempo de CPU
+        if(remainingP < remainingShortest){
+
+            // se convierte en el nuevo proceso más corto
+            shortest = p;
+
+        // Si tienen el mismo tiempo usamos el tie breaker del sistema
+        }else if(remainingP == remainingShortest){
+
+            shortest = tieBreaker(shortest, p);
+
         }
     }
 
-    @Override
-public void newProcess(boolean cpuEmpty) {
+    // Removemos el proceso seleccionado de la Ready Queue
+    removeProcess(shortest);
 
-    if (processes.isEmpty())
-        return;
-
-    if (os.isCPUEmpty()) {
-        getNext(true);
-        return;
-    }
-
-    Process running = os.getProcessInCPU();
-
-    Process shortest = processes.stream()
-            .min(Comparator.comparingInt(Process::getRemainingTimeInCurrentBurst))
-            .orElse(null);
-
-    if (shortest == null)
-        return;
-
-    if (shortest.getRemainingTimeInCurrentBurst()
-            < running.getRemainingTimeInCurrentBurst()) {
-
-        
-        os.interrupt(
-            InterruptType.SCHEDULER_CPU_TO_RQ,
-            running
-        );
-
-      
-        removeProcess(shortest);
-
-        
-        os.interrupt(
-            InterruptType.SCHEDULER_RQ_TO_CPU,
-            shortest
-        );
-    }
+    // Lo enviamos al CPU usando una interrupción del scheduler
+    os.interrupt(InterruptType.SCHEDULER_RQ_TO_CPU, shortest);
 }
+    
+    @Override
+    public void newProcess(boolean cpuEmpty) {
+          System.out.println("SJF_NP getNext llamado. cpuEmpty=" + cpuEmpty);
+       if(cpuEmpty){
+        getNext(true);
+        }
+    } //Non-preemtive
 
     @Override
     public void IOReturningProcess(boolean cpuEmpty) {
-        newProcess(cpuEmpty);
-    }
-    @Override
-public void update() {
-
-    boolean cpuEmpty = os.isCPUEmpty();
-
-    if (cpuEmpty) {
+         if(cpuEmpty){
         getNext(true);
-    } else {
-       
-        newProcess(false);
     }
-}
+    } //Non-preemtive
+    
 }
