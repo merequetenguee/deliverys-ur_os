@@ -384,7 +384,7 @@ public final class SystemOS implements Runnable{
             } else {
                 tempID = temp_exec.getPid();
                 if (temp_exec.getFirstExecutionTime() == -1) {
-                    temp_exec.setFirstExecutionTime(clock);
+                    temp_exec.setFirstExecutionTime(i);
                 }
             }
             execution.add(tempID);
@@ -562,45 +562,17 @@ public double calcAvgContextSwitches() {
     
     //Just context switches based on the execution timeline
  public double calcAvgContextSwitches2() {
- if (execution == null || execution.isEmpty())
+    if (execution == null || execution.isEmpty())
         return 0;
 
-    int switches = 0;
-    int i = 0;
+    int dispatches = 0;
+    int prev = -1;
 
-    // saltar idle inicial
-    while (i < execution.size() && execution.get(i) == -1) {
-        i++;
-    }
-
-    if (i >= execution.size())
-        return 0;
-
-    int lastProcess = execution.get(i);
-    i++;
-
-    while (i < execution.size()) {
-
-        // saltar bloque continuo del mismo proceso
-        while (i < execution.size() && execution.get(i) == lastProcess) {
-            i++;
+    for (int current : execution) {
+        if (current != -1 && prev != current) {
+            dispatches++;
         }
-
-        // saltar idle intermedio
-        while (i < execution.size() && execution.get(i) == -1) {
-            i++;
-        }
-
-        if (i < execution.size()) {
-            int nextProcess = execution.get(i);
-
-            if (nextProcess != lastProcess) {
-                switches++;
-                lastProcess = nextProcess;
-            }
-        }
-
-        i++;
+        prev = current;
     }
 
     int finished = 0;
@@ -612,9 +584,10 @@ public double calcAvgContextSwitches() {
     if (finished == 0)
         return 0;
 
-    return (double) switches / finished;
+    return (double) dispatches / finished;
 }
-   
+
+
     
     public double calcResponseTime() {
         
