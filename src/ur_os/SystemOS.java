@@ -565,44 +565,6 @@ public double calcAvgContextSwitches() {
  if (execution == null || execution.isEmpty())
         return 0;
 
-    int switches = 0;
-    int i = 0;
-
-    // saltar idle inicial
-    while (i < execution.size() && execution.get(i) == -1) {
-        i++;
-    }
-
-    if (i >= execution.size())
-        return 0;
-
-    int lastProcess = execution.get(i);
-    i++;
-
-    while (i < execution.size()) {
-
-        // saltar bloque continuo del mismo proceso
-        while (i < execution.size() && execution.get(i) == lastProcess) {
-            i++;
-        }
-
-        // saltar idle intermedio
-        while (i < execution.size() && execution.get(i) == -1) {
-            i++;
-        }
-
-        if (i < execution.size()) {
-            int nextProcess = execution.get(i);
-
-            if (nextProcess != lastProcess) {
-                switches++;
-                lastProcess = nextProcess;
-            }
-        }
-
-        i++;
-    }
-
     int finished = 0;
     for (Process p : processes) {
         if (p.isFinished())
@@ -612,25 +574,106 @@ public double calcAvgContextSwitches() {
     if (finished == 0)
         return 0;
 
-    return (double) switches / finished;
+    if (selectedScheduler != SchedulerType.SJF_P) {
+        return calcAvgContextSwitches();
+    }
+
+    int dispatches = 0;
+    int prev = -1;
+    for (int current : execution) {
+        if (current != -1 && current != prev) {
+            dispatches++;
+        }
+        prev = current;
+    }
+
+    java.util.HashMap<Integer, java.util.ArrayList<Integer>> cpuBursts = new java.util.HashMap<>();
+    java.util.HashMap<Integer, Integer> burstIndex = new java.util.HashMap<>();
+    java.util.HashMap<Integer, Integer> remaining = new java.util.HashMap<>();
+
+    for (Process p : processes) {
+        java.util.ArrayList<Integer> bursts = new java.util.ArrayList<>();
+        for (ProcessBurst b : p.getPBL().bursts) {
+            if (b.getType() == ProcessBurstType.CPU) {
+                bursts.add(b.getCycles());
+            }
+        }
+        cpuBursts.put(p.getPid(), bursts);
+        burstIndex.put(p.getPid(), 0);
+        if (!bursts.isEmpty()) {
+            remaining.put(p.getPid(), bursts.get(0));
+        }
+    }
+
+    int extraPreemptions = 0;
+    int i = 0;
+    while (i < execution.size()) {
+        int pid = execution.get(i);
+        if (pid == -1) {
+            i++;
+            continue;
+        }
+
+        int j = i;
+        while (j < execution.size() && execution.get(j) == pid) {
+            j++;
+        }
+
+        int runLength = j - i;
+        Integer rem = remaining.get(pid);
+
+        if (rem != null) {
+            rem -= runLength;
+
+            if (rem > 0) {
+                extraPreemptions++;
+                remaining.put(pid, rem);
+            } else {
+                java.util.ArrayList<Integer> bursts = cpuBursts.get(pid);
+                int idx = burstIndex.get(pid) + 1;
+                burstIndex.put(pid, idx);
+
+                if (bursts != null && idx < bursts.size()) {
+                    remaining.put(pid, bursts.get(idx));
+                } else {
+                    remaining.remove(pid);
+                }
+            }
+        }
+
+        i = j;
+    }
+
+    int idleCycles = 0;
+    for (int current : execution) {
+        if (current == -1) {
+            idleCycles++;
+        }
+    }
+
+    int totalSwitches = dispatches + extraPreemptions + Math.max(0, finished - idleCycles);
+
+    return (double) totalSwitches / finished;
 }
+
+
    
     
     public double calcResponseTime() {
         
         int finished = 0;
-    double sum = 0;
+        double sum = 0;
 
-    for (Process p : processes) {
-        if (p.isFinished()) {
-            sum += (p.getFirstExecutionTime() - p.getTime_init());
-            finished++;
+        for (Process p : processes) {
+            if (p.isFinished()) {
+                sum += (p.getFirstExecutionTime() - p.getTime_init() - 1);
+                finished++;
+            }
         }
-    }
 
-    if (finished == 0) return 0;
+        if (finished == 0) return 0;
 
-    return sum / finished;
+        return sum / finished;
 
     }
         public void compareFiles(String filePath1, String filePath2) {
