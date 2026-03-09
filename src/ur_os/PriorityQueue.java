@@ -41,54 +41,65 @@ public class PriorityQueue extends Scheduler {
         schedulers.get(priority).addProcess(p);
     }
 
+    void defineCurrentScheduler() {
 
+        for (int i = 0; i < schedulers.size(); i++) {
+            if (!schedulers.get(i).isEmpty()) {
+                currentScheduler = i;
+                return;
+            }
+        }
 
- void defineCurrentScheduler() {
+        currentScheduler = -1;
+    }
 
-    for (int i = 0; i < schedulers.size(); i++) {
-        if (!schedulers.get(i).isEmpty()) {
-            currentScheduler = i;
+    @Override
+    public void getNext(boolean cpuEmpty) {
+
+        if (currentScheduler == -1 || schedulers.get(currentScheduler).isEmpty()) {
+            currentScheduler = -1;
+            defineCurrentScheduler();
+        }
+
+        if (currentScheduler == -1)
+            return;
+
+        if (cpuEmpty) {
+            schedulers.get(currentScheduler).getNext(true);
             return;
         }
-    }
 
-    currentScheduler = -1;
-}
+        Process current = os.getProcessInCPU();
 
+        if (current == null)
+            return;
 
- 
-@Override
-public void getNext(boolean cpuEmpty) {
+        int schedulerIndex = current.getCurrentScheduler();
 
-if (currentScheduler == -1 || schedulers.get(currentScheduler).isEmpty()) {
-        currentScheduler = -1;
-        defineCurrentScheduler();
-    }
+        if (schedulerIndex < 0 || schedulerIndex >= schedulers.size())
+            return;
 
-    if (currentScheduler == -1)
-        return;
-
-    Scheduler scheduler = schedulers.get(currentScheduler);
-
-    if (cpuEmpty) {
-        scheduler.getNext(true);
-        return;
-    }
-
-    Process current = os.getProcessInCPU();
-
-    if (current == null)
-        return;
-
-    int schedulerIndex = current.getCurrentScheduler();
-
-    if (schedulerIndex < schedulers.size()) {
-
+        Scheduler scheduler = schedulers.get(schedulerIndex);
         currentScheduler = schedulerIndex;
 
-        schedulers.get(currentScheduler).getNext(false);
+        if (scheduler instanceof RoundRobin rr
+                && rr.currentq == 0
+                && current.getRemainingTimeInCurrentBurst() >= 1) {
+
+            os.interrupt(InterruptType.SCHEDULER_CPU_TO_RQ, null);
+
+            currentScheduler = -1;
+            defineCurrentScheduler();
+
+            if (currentScheduler != -1) {
+                schedulers.get(currentScheduler).getNext(true);
+            }
+            return;
+        }
+
+        scheduler.getNext(false);
     }
-}
+
     @Override
     public void newProcess(boolean cpuEmpty) {
 
