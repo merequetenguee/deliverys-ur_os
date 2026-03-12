@@ -1,6 +1,8 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
 package ur_os;
-
-import java.util.Comparator;
 
 public class SJF_P extends Scheduler {
 
@@ -11,47 +13,51 @@ public class SJF_P extends Scheduler {
     //  Seleccionar el siguiente proceso y pasarlo a la CPU
     @Override
     public void getNext(boolean cpuEmpty) {
-        CPU cpu = os.cpu; // accedemos al CPU del sistema
+       if (!cpuEmpty || processes.isEmpty()) {
+            return;
+        }
+        Process shortest=processes.getFirst();
+        for( Process candidate: processes){
+            int candidaterem=candidate.getRemainingTimeInCurrentBurst();
+            int shortestrem= shortest.getRemainingTimeInCurrentBurst();
+            if (candidaterem==shortestrem && candidate.getPid()<shortest.getPid()){
 
-        if (cpuEmpty && !processes.isEmpty()) {
-            // Buscar el proceso con MENOR burst
-            Process next = processes.stream()
-                    .min(Comparator.comparingInt(Process::getBurstTime))
-                    .orElse(null);
+                shortest=candidate;
 
-            if (next != null) {
-                processes.remove(next);    // lo saco de la cola de listos
-                cpu.addProcess(next);      // lo meto en la CPU
-                addContextSwitch();
             }
         }
+      processes.remove(shortest);
+      os.interrupt(InterruptType.SCHEDULER_RQ_TO_CPU, shortest);
+      addContextSwitch();
+
     }
 
     //  Cuando entra un proceso nuevo
     @Override
     public void newProcess(boolean cpuEmpty) {
-        CPU cpu = os.cpu;
-
-        if (!cpu.isEmpty()) {
-            Process running = cpu.getProcess(); // el que está corriendo ahora
-
-            // Buscar el más corto en la cola de listos
-            Process shortest = processes.stream()
-                    .min(Comparator.comparingInt(Process::getBurstTime))
-                    .orElse(null);
-
-            if (shortest != null && shortest.getBurstTime() < running.getBurstTime()) {
-                // Preemption sacar el que está corriendo
-                cpu.extractProcess();
-                processes.add(running);
-
-                // Ejecutar el más corto
-                processes.remove(shortest);
-                cpu.addProcess(shortest);
-                addContextSwitch();
-            }
-        } else {
+        if(cpuEmpty){
             getNext(true);
+        }
+        Process running=os.getProcessInCPU();
+        if(running==null|| processes.isEmpty()){
+            return;
+
+        }
+        Process shortest = processes.getFirst();
+        for (Process candidate : processes) {
+            int candidateRemaining = candidate.getRemainingTimeInCurrentBurst();
+            int shortestRemaining = shortest.getRemainingTimeInCurrentBurst();
+
+             if (candidateRemaining < shortestRemaining
+                    || (candidateRemaining == shortestRemaining && candidate.getPid() < shortest.getPid())) {
+                shortest = candidate;
+            }
+        }
+        if (shortest.getRemainingTimeInCurrentBurst() < running.getRemainingTimeInCurrentBurst()) {
+            os.interrupt(InterruptType.SCHEDULER_CPU_TO_RQ, shortest);
+            processes.remove(shortest);
+            addContextSwitch();
+
         }
     }
 
