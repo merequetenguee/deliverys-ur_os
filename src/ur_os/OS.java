@@ -1,6 +1,5 @@
 package ur_os;
 
-import static ur_os.InterruptType.SCHEDULER_CPU_TO_RQ;
 
 public class OS {
 
@@ -87,5 +86,8 @@ public class OS {
         System.out.println(rq.toString());
     }
 
+    public static int getProcessCount() {
+        return process_count;
+    }
 
 }

@@ -565,84 +565,22 @@ public double calcAvgContextSwitches2() {
  if (execution == null || execution.isEmpty())
         return 0;
 
-    int finished = 0;
-    for (Process p : processes) {
-        if (p.isFinished())
-            finished++;
-    }
-
-    if (finished == 0)
+    int processCount = OS.getProcessCount();
+    if (processCount == 0)
         return 0;
 
-    int dispatches = 0;
-    int prev = -1;
-    for (int current : execution) {
-        if (current != -1 && current != prev) {
-            dispatches++;
-        }
-        prev = current;
-    }
+    int switches = 0;
 
-    java.util.HashMap<Integer, java.util.ArrayList<Integer>> cpuBursts = new java.util.HashMap<>();
-    java.util.HashMap<Integer, Integer> burstIndex = new java.util.HashMap<>();
-    java.util.HashMap<Integer, Integer> remaining = new java.util.HashMap<>();
-
-    for (Process p : processes) {
-        java.util.ArrayList<Integer> bursts = new java.util.ArrayList<>();
-        for (ProcessBurst b : p.getPBL().bursts) {
-            if (b.getType() == ProcessBurstType.CPU) {
-                bursts.add(b.getCycles());
-            }
-        }
-        cpuBursts.put(p.getPid(), bursts);
-        burstIndex.put(p.getPid(), 0);
-        if (!bursts.isEmpty()) {
-            remaining.put(p.getPid(), bursts.get(0));
+    for (int i = 1; i < execution.size(); i++) {
+        if (!execution.get(i).equals(execution.get(i - 1))) {
+            switches++;
         }
     }
 
-    int extraPreemptions = 0;
-    int i = 0;
-    while (i < execution.size()) {
-        int pid = execution.get(i);
-        if (pid == -1) {
-            i++;
-            continue;
-        }
+    // Contar el primer dispatch
+    switches++;
 
-        int j = i;
-        while (j < execution.size() && execution.get(j) == pid) {
-            j++;
-        }
-
-        int runLength = j - i;
-        Integer rem = remaining.get(pid);
-
-        if (rem != null) {
-            rem -= runLength;
-
-            if (rem > 0) {
-                extraPreemptions++;
-                remaining.put(pid, rem);
-            } else {
-                java.util.ArrayList<Integer> bursts = cpuBursts.get(pid);
-                int idx = burstIndex.get(pid) + 1;
-                burstIndex.put(pid, idx);
-
-                if (bursts != null && idx < bursts.size()) {
-                    remaining.put(pid, bursts.get(idx));
-                } else {
-                    remaining.remove(pid);
-                }
-            }
-        }
-
-        i = j;
-    }
-
-    int totalSwitches = dispatches + extraPreemptions;
-
-    return (double) totalSwitches / finished;
+    return (double) switches / processCount;
 }
 
 
